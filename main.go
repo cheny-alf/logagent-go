@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"logagent/kafka"
 	"logagent/tailfile"
+	"strings"
 	"time"
 )
 
@@ -26,6 +27,7 @@ type CollectConfig struct {
 }
 
 //真真的业务逻辑
+
 //tailobj --> log --> client -->kafka
 func run() (err error) {
 	for {
@@ -36,12 +38,16 @@ func run() (err error) {
 			time.Sleep(time.Second)
 			continue
 		}
+		//抛弃掉空行 跳过
+		if len(strings.Trim(line.Text, "\r")) == 0 {
+			continue
+		}
 		//利用通道 将同步的代码 改为异步
 		//把读出来的一行日志 包装程kafka里面的数据类型放到通道中
 		msg := &sarama.ProducerMessage{}
 		msg.Topic = "web_log"
 		msg.Value = sarama.StringEncoder(line.Text)
-		kafka.MsgChan <- msg
+		kafka.MsgChan(msg)
 
 	}
 }
