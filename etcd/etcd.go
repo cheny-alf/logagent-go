@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"logagent/common"
+	"logagent/tailfile"
 	"time"
 )
 
@@ -46,4 +47,32 @@ func GetConf(key string) (collectEntryList []common.CollectEntry, err error) {
 		return
 	}
 	return
+}
+
+//监控etcd中日志收集项配置变化的函数
+func WatchConf(key string) {
+	for {
+		watchCh := client.Watch(context.Background(), key)
+
+		for wresp := range watchCh {
+			logrus.Infof("get new conf from etcd")
+			for _, evt := range wresp.Events {
+				logrus.Infof("type:%s key:%s value:%s", evt.Type, evt.Kv.Key, evt.Kv.Value)
+				var newConf []common.CollectEntry
+				if evt.Type == clientv3.EventTypeDelete {
+					//如果是删除操作
+					logrus.Warning("etcd delete the key")
+					tailfile.SendNewConf(newConf)
+					continue
+				}
+				err := json.Unmarshal(evt.Kv.Value, &newConf)
+				if err != nil {
+					logrus.Errorf("json unmarshal new conf failed, err:", err)
+					continue
+				}
+				//告诉tailfile这个模块应该启用新的配置了
+				tailfile.SendNewConf(newConf) //没有人接收就会阻塞
+			}
+		}
+	}
 }
