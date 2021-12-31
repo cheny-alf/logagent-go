@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/go-ini/ini"
 	"github.com/sirupsen/logrus"
+	"logagent/common"
 	"logagent/etcd"
 	"logagent/kafka"
 	"logagent/tailfile"
@@ -37,6 +38,13 @@ func run() {
 }
 
 func main() {
+
+	//获取本机IP 为后续的etcd获取文件做基础
+	ip, err := common.GetOutboundIp()
+	if err != nil {
+		logrus.Errorf("get ip failed err:%v", err)
+		return
+	}
 	var configObj = new(Config)
 	//1.读取配置文件go ini
 	//cfg, err := ini.Load("./conf/config.ini")
@@ -69,6 +77,7 @@ func main() {
 		return
 	}
 	//从etcd中拉取要收集日志的配置项
+	collectKey := fmt.Sprintf(configObj.EtcdConfig.CollectKey, ip)
 	allconf, err := etcd.GetConf(configObj.EtcdConfig.CollectKey)
 	if err != nil {
 		logrus.Errorf("get conf from  etcd failed, err:%v", err)
@@ -76,7 +85,7 @@ func main() {
 	}
 	fmt.Println(allconf)
 	//监控etcd中configObj.EtcdConfig.CollectKey对应值的变化
-	go etcd.WatchConf(configObj.EtcdConfig.CollectKey)
+	go etcd.WatchConf(collectKey)
 	//3。根据配置文件中的日志路径使用tail去收集日志
 	err = tailfile.Init(allconf)
 	if err != nil {
